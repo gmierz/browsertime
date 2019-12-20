@@ -6097,8 +6097,8 @@
       "integrity": "sha512-g3WxHrqSWCZHGHlSrF51VXFdjImhwvH8ZO/pryFH56Qi0cDsZfylQa/t0jCzVQFNbNvM00HfHjkDPEuarKDSWQ=="
     },
     "selenium-webdriver": {
-      "version": "https://github.com/gmierz/selenium/archive/4.0.4-mozilla.tar.gz",
-      "integrity": "sha512-OHsISZG7YZ5bG5p89de49pGz+5lVnLJftEQTO6bAudlPMLFN50st4LEqQOIOI1dUWbyFO8GOoNL3rKphkPNz6g==",
+      "version": "https://github.com/gmierz/selenium/archive/4.0.4-mozilla-2.tar.gz",
+      "integrity": "sha512-BmRcueEsoyDWCvBOqr6XE3ZO4G1aQobi6UPwE2aSui6FqEnIfbrXG9i7YmrT8Sndf0Lx8qCwAOJgAjCUSTN74w==",
       "requires": {
         "jszip": "^3.1.5",
         "rimraf": "^2.6.3",
