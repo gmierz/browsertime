@@ -30,6 +30,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE."""
 # The original script from Google was heavily modified for the Browsertime
 # project.
 #
+import cv2
 import gc
 import glob
 import gzip
@@ -44,6 +45,9 @@ import shutil
 import subprocess
 import tempfile
 
+import numpy as np
+from PIL import Image, ImageDraw, ImageOps
+
 if sys.version_info > (3, 0):
     GZIP_TEXT = "wt"
     GZIP_READ_TEXT = "rt"
@@ -56,6 +60,115 @@ options = None
 client_viewport = None
 image_magick = {"convert": "convert", "compare": "compare", "mogrify": "mogrify"}
 frame_cache = {}
+
+
+def crop_im(img, crop_x, crop_y, crop_x_offset, crop_y_offset, gravity=None):
+    img = np.array(img)
+
+    base_x = 0
+    base_y = 0
+
+    height, width, _ = img.shape
+    if gravity == "center":
+        base_x = width // 2
+        base_y = height // 2
+
+        base_x -= crop_x // 2
+        base_y -= crop_y // 2
+
+    base_x += crop_x_offset
+    base_y += crop_y_offset
+
+    return Image.fromarray(img[base_y:base_y+crop_y, base_x:base_x+crop_x, :])
+
+
+def resize(img, width, height):
+    try:
+        img = Image.fromarray(img)
+    except:
+        pass
+    return img.resize((width, height), resample=Image.LANCZOS)
+
+
+def scale(img, maxsize):
+    width, height = img.size
+    ratio = min(maxsize/float(width), maxsize/float(height))
+    return resize(img, int(width*ratio), int(height*ratio))
+
+
+def build_edge_video(video_path, viewport):
+    output_dir, video_name = os.path.split(video_path)
+    video_name, video_ext = os.path.splitext(video_name)
+
+    # Get the edges of all frames
+    edge_video = []
+    resized_video = []
+    video = cv2.VideoCapture(video_path)
+    frame_count = video.get(cv2.CAP_PROP_FPS)
+    while video.isOpened():
+        ret, frame = video.read()
+        if ret:
+            cropped_im = frame
+            if viewport:
+                cropped_im = crop_im(
+                    frame,
+                    viewport["width"],
+                    viewport["height"],
+                    viewport["x"],
+                    viewport["y"]
+                )
+            logging.debug(cropped_im.size)
+            logging.debug(options.thumbsize)
+            resized_video.append(scale(
+                cropped_im,
+                options.thumbsize,
+            ))
+            
+            tmp_frame = resized_video[-1]
+            tmp_frame.save("tmp-frame.png")
+
+            # Takes full path of PNG frames to compute contentfulness value
+            command = "{0} {1} -canny 2x2+8%+8% res.png".format(
+                image_magick["convert"], "tmp-frame.png"
+            )
+            output = subprocess.check_output(command, shell=True).decode("utf-8")
+            logging.debug("Output %s" % output)
+
+            edge_video.append(np.array(Image.open("res.png")))
+            os.remove("tmp-frame.png")
+            os.remove("res.png")
+        else:
+            video.release()
+            break
+
+    out_size = edge_video[-1].shape
+    out_edges = cv2.VideoWriter(
+        os.path.join(output_dir, video_name + "-edges.mp4"),
+        cv2.VideoWriter_fourcc(*'MP4V'),
+        frame_count,
+        (out_size[1], out_size[0]),
+        1,
+    )
+    out_edges_overlay = cv2.VideoWriter(
+        os.path.join(output_dir, video_name + "-edges-overlay.mp4"),
+        cv2.VideoWriter_fourcc(*'MP4V'),
+        frame_count,
+        (out_size[1], out_size[0]),
+        1,
+    )
+    for i, frame in enumerate(edge_video):
+        cframe = np.zeros((out_size[0], out_size[1], 3))
+        overlayframe = np.array(resized_video[i])
+        for x in range(cframe.shape[0]):
+            for y in range(cframe.shape[1]):
+                if frame[x,y] != 0:
+                    cframe[x,y,:] = (0, 0, 255)
+                    overlayframe[x,y,:] = (0, 0, 255)
+        out_edges.write(np.uint8(cframe))
+        out_edges_overlay.write(np.uint8(overlayframe))
+
+    out_edges.release()
+    out_edges_overlay.release()
 
 # #################################################################################################
 # Frame Extraction and de-duplication
@@ -107,6 +220,10 @@ def video_to_frames(
                     is_mobile,
                 )
                 gc.collect()
+
+                if options.contentful:
+                    build_edge_video(video, viewport)
+
                 if extract_frames(video, directory, full_resolution, viewport):
                     client_viewport = None
                     if find_viewport and options.notification:
