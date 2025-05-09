@@ -31,7 +31,7 @@
     "lodash.pick": "4.4.0",
     "lodash.set": "4.3.2",
     "selenium-webdriver": "4.24.0",
-    "usb-power-profiling": "1.4.0",
+    "usb-power-profiling": "git://github.com/gmierz/usb-power-profiling.git#cc58c2343960b216b6d6cb46a9dd3d6a9558865a",
     "yargs": "17.7.2"
   },
   "optionalDependencies": {
